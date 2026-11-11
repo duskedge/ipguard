@@ -1,0 +1,51 @@
+# ipguard 单独部署(接入你已有的 CrowdSec 和反向代理)。
+#
+# 用法:
+#   cp deploy/ipguard.env.example deploy/.env && chmod 600 deploy/.env   # 填登录口令、CrowdSec machine 凭据
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+#
+# 目录约定(都可在 .env 里改):
+#   IPGUARD_DATA_DIR   SQLite(审计日志)、JWT 密钥、规则配置;可放 geoip/dbip-city-lite.mmdb 覆盖镜像内置库
+#   PROXY_LOGS_DIR     反向代理的访问日志目录(combined 格式,需含真实客户端 IP)
+#   PROXY_NGINX_DIR    可选:Nginx Proxy Manager 的 data/nginx 目录,用来把后端补全成"地址:端口"
+services:
+  ipguard:
+    image: ${IPGUARD_IMAGE:-ghcr.io/duskedge/ipguard:latest}
+    container_name: ipguard
+    restart: unless-stopped
+    ports:
+      # 面板默认只建议内网访问;对外请走反向代理
+      - "${IPGUARD_PORT:-28090}:8080"
+    env_file:
+      - .env
+    environment:
+      IPGUARD_LOGS_DIR: /logs
+      IPGUARD_STORAGE_DATADIR: /app/data
+      IPGUARD_GEOIP_CITYDB: /app/data/geoip/dbip-city-lite.mmdb
+      IPGUARD_CROWDSEC_URL: ${IPGUARD_CROWDSEC_URL:-http://crowdsec:8080}
+    volumes:
+      - ${IPGUARD_DATA_DIR:-./data}:/app/data
+      - ${PROXY_LOGS_DIR:-./logs}:/logs:ro
+      - ${PROXY_NGINX_DIR:-./npm-nginx}:/npm-nginx:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - default
+      - crowdsec
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+networks:
+  # 加入 CrowdSec 所在的 docker 网络,用容器名直连 LAPI(http://crowdsec:8080)。
+  # 网络名用 `docker network ls` 查;CrowdSec 不在同一台机器时,改 IPGUARD_CROWDSEC_URL 并删掉这段。
+  crowdsec:
+    external: true
+    name: ${CROWDSEC_NETWORK:-crowdsec_default}

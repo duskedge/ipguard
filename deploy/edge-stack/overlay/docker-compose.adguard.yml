@@ -1,0 +1,29 @@
+# 可选叠加:AdGuard Home(DNS 过滤 / 内网重写)
+# 用法:./setup.sh --with-adguard   或   docker compose -f docker-compose.yml -f overlay/docker-compose.adguard.yml up -d adguard
+#
+# 设计:AdGuard 不像 npm-guard 那样需要"真实客户端 IP",所以【不走 macvlan、不单独占 LAN IP】,
+#       直接用宿主端口映射即可(前提:宿主 :53 空闲)。
+#   - DNS   → 宿主 ${ADGUARD_DNS_PORT:-53} (tcp+udp)
+#   - 后台  → 宿主 ${ADGUARD_WEB_PORT:-3000}
+# setup.sh --with-adguard 会在首启后调 tools/adguard_setup.py 预置管理员账号(免手动向导),并自检解析。
+
+services:
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: unless-stopped
+    environment:
+      TZ: "${TZ}"
+    volumes:
+      - ./adguard/work:/opt/adguardhome/work
+      - ./adguard/conf:/opt/adguardhome/conf
+    ports:
+      - "${ADGUARD_DNS_PORT:-53}:53/tcp"
+      - "${ADGUARD_DNS_PORT:-53}:53/udp"
+      - "${ADGUARD_WEB_PORT:-3000}:3000/tcp"   # 安装向导 + 配置完成后的管理界面(本脚本把 web 端口固定在 3000)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

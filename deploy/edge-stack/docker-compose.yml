@@ -1,0 +1,108 @@
+# 家庭边缘防护整套链路:CrowdSec(检测)+ jmrplens bouncer(落地到 RouterOS)+ npm-guard(反代/真实客户端 IP)
+# 所有宿主相关参数来自同目录 .env(见 .env.example)。由 setup.sh 一键拉起,勿手动乱序启动。
+# NPM 默认用内置 SQLite,无需外部数据库;如需 MySQL 自行加 DB_MYSQL_* 环境变量。
+
+services:
+  # ---- 检测引擎:读反代日志,出封禁决策,提供 LAPI ----
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: "crowdsecurity/nginx crowdsecurity/base-http-scenarios crowdsecurity/http-cve"
+      TZ: "${TZ}"
+      # 关掉 CAPI(社区黑名单在线拉取)。验证/隔离部署设 true:只靠本地检测 + 手动决策验证链路,
+      # 不会把上万条社区黑名单灌进 ROS 地址表。默认 false = 正常拉社区黑名单。
+      DISABLE_ONLINE_API: "${CROWDSEC_DISABLE_CAPI:-false}"
+    volumes:
+      - ./crowdsec/config:/etc/crowdsec
+      - ./crowdsec/data:/var/lib/crowdsec/data
+      - ./crowdsec/acquis.d:/etc/crowdsec/acquis.d
+      - ./npm/data/logs:/var/log/npm:ro          # 读 npm-guard 的统一访问日志
+    ports:
+      - "${LAPI_PORT}:8080"                        # LAPI,给 bouncer / ipguard 用
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ---- 决策执行器:把 CrowdSec 决策同步到 RouterOS 地址表,并自建 raw 丢弃规则 ----
+  routeros-bouncer:
+    image: ghcr.io/jmrplens/cs-routeros-bouncer:latest
+    container_name: cs-routeros-bouncer
+    restart: unless-stopped
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+    environment:
+      CROWDSEC_URL: "http://crowdsec:8080/"
+      CROWDSEC_BOUNCER_API_KEY: "${BOUNCER_API_KEY}"   # 由 setup.sh 自动注册写入
+      CROWDSEC_UPDATE_FREQUENCY: "10s"
+      MIKROTIK_HOST: "${MIKROTIK_HOST}"
+      MIKROTIK_USER: "${MIKROTIK_USER}"
+      MIKROTIK_PASS: "${MIKROTIK_PASS}"
+      MIKROTIK_TLS: "false"
+      MIKROTIK_CPU_LIMIT: "70"                          # ROS CPU 超阈值自动降速灌表
+      MIKROTIK_BULK_ADD_METHOD: "script"                # 批量脚本写入,省 CPU
+      FIREWALL_IPV4_ENABLED: "true"
+      FIREWALL_IPV4_ADDRESS_LIST: "${ADDRESS_LIST}"     # 地址表名(ROS drop 规则引用它)
+      FIREWALL_IPV6_ENABLED: "false"
+      FIREWALL_FILTER_ENABLED: "false"                  # 不用 filter 链
+      FIREWALL_RAW_ENABLED: "true"                      # 用 raw/prerouting(至少 filter/raw 开一个)
+      FIREWALL_BLOCK_INPUT_INTERFACE: "${MIKROTIK_WAN_IFACE}"  # 只在 WAN 入口丢弃
+      FIREWALL_RULE_PLACEMENT: "top"
+      LOG_LEVEL: "info"
+
+  # ---- shim:让 macvlan 的 npm-guard 能访问宿主服务(macvlan 容器默认不可达宿主)----
+  npm-shim:
+    image: alpine:3.20
+    container_name: npm-shim
+    network_mode: host
+    cap_add: [NET_ADMIN]
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache iproute2 >/dev/null 2>&1 || true
+        ip link del npm_shim 2>/dev/null || true
+        ip link add npm_shim link ${PARENT_IFACE} type macvlan mode bridge
+        ip addr add ${SHIM_IP}/32 dev npm_shim
+        ip link set npm_shim up
+        ip route replace ${NPM_IP}/32 dev npm_shim
+        echo "npm_shim ready: host <-> ${NPM_IP} via ${SHIM_IP}"
+        sleep infinity
+
+  # ---- 反代:macvlan 独立 IP → nginx 直接看到真实客户端 IP,写统一 combined 日志 ----
+  npm-guard:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm-guard
+    restart: unless-stopped
+    depends_on: [npm-shim]
+    dns: ["${LAN_GATEWAY}"]
+    extra_hosts:
+      - "host-gw:${SHIM_IP}"        # 需反代宿主上的服务时用 host-gw 指向 shim
+    environment:
+      DISABLE_IPV6: "true"
+      # 申请 Cloudflare DNS 挑战证书时,NPM 会 pip 安装 certbot-dns-cloudflare;
+      # 国内把下面指向阿里云镜像(默认走官方 pypi,海外可不改)。
+      PIP_INDEX_URL: "${PIP_INDEX_URL:-https://pypi.org/simple/}"
+      PIP_TRUSTED_HOST: "${PIP_TRUSTED_HOST:-pypi.org}"
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+    networks:
+      npm_mv:
+        ipv4_address: "${NPM_IP}"
+
+networks:
+  npm_mv:
+    driver: macvlan
+    driver_opts:
+      parent: "${PARENT_IFACE}"
+    ipam:
+      config:
+        - subnet: "${LAN_SUBNET}"
+          gateway: "${LAN_GATEWAY}"

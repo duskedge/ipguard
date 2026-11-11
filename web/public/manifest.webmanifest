@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "ipguard · 安全运维面板",
+  "short_name": "ipguard",
+  "description": "访问日志分析、城市级 GeoIP 统计与 CrowdSec 一键封禁面板",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#0e131b",
+  "theme_color": "#4f46e5",
+  "categories": ["security", "utilities"],
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

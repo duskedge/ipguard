@@ -1,0 +1,9 @@
+# 本机实配与运行时数据,不提交
+.env
+.env.bak
+overlay/ipguard.env
+crowdsec/
+npm/
+ipguard-data/
+mysql-data/
+adguard/

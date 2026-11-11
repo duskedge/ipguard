@@ -1,0 +1,32 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# 数据/运行时
+/data/
+*.db
+*.sqlite
+config.yaml
+config.local.yaml
+.env
+.env.local
+
+# 前端
+web/node_modules/
+web/dist/
+web/.vite/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# 本地凭据/私密文档
+*.local.md
+
+# 嵌入目录里只提交占位页，构建产物不进版本库
+/internal/webui/dist/*
+!/internal/webui/dist/index.html

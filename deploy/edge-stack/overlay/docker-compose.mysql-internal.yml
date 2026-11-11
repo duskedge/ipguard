@@ -1,0 +1,46 @@
+# NPM_DB_MODE=mysql-internal:在本栈内自带一个 MySQL(MariaDB),npm-guard 经额外的 bridge 网络直连它。
+# 由 setup.sh 自动叠加(docker compose -f docker-compose.yml -f overlay/docker-compose.mysql-internal.yml)。
+#
+# 要点:npm-guard 是 macvlan,默认不可达其它容器;这里给它再加一张 npm_backend 桥接网卡,
+#      从而能用容器名 mysql 直连数据库(入站真实客户端 IP 仍走 macvlan,不受影响)。
+
+services:
+  mysql:
+    image: jc21/mariadb-aria:latest        # NPM 官方推荐,兼容性最好
+    container_name: npm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_MYSQL_ROOT_PASSWORD:-change-me-root}"
+      MYSQL_DATABASE: "${DB_MYSQL_NAME:-npm}"
+      MYSQL_USER: "${DB_MYSQL_USER:-npm}"
+      MYSQL_PASSWORD: "${DB_MYSQL_PASSWORD:-change-me-db}"
+      TZ: "${TZ}"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    networks:
+      - npm_backend
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  npm-guard:
+    depends_on:
+      npm-shim:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_MYSQL_HOST: "mysql"
+      DB_MYSQL_PORT: "3306"
+      DB_MYSQL_USER: "${DB_MYSQL_USER:-npm}"
+      DB_MYSQL_PASSWORD: "${DB_MYSQL_PASSWORD:-change-me-db}"
+      DB_MYSQL_NAME: "${DB_MYSQL_NAME:-npm}"
+    networks:
+      npm_backend: {}
+
+networks:
+  npm_backend:
+    driver: bridge

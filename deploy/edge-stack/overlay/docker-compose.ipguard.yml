@@ -1,0 +1,39 @@
+# 可选叠加:ipguard 面板(看日志 + GeoIP + 一键封禁 + 域名级访问网关)
+# 用法:docker compose -f docker-compose.yml -f overlay/docker-compose.ipguard.yml up -d ipguard
+# 或:  ./setup.sh --with-ipguard
+#
+# 前提:ipguard 镜像可拉取(IPGUARD_IMAGE),且已在 overlay/ipguard.env 配好登录与 CrowdSec machine 凭据。
+# 注意:ipguard 用 host 端口 28090;npm-guard(macvlan)经 SHIM_IP:28090 访问它(nginx 网关里写的就是这个)。
+
+services:
+  ipguard:
+    image: "${IPGUARD_IMAGE:-ghcr.io/duskedge/ipguard:latest}"
+    container_name: ipguard
+    restart: unless-stopped
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+    ports:
+      - "28090:8080"                 # 宿主 28090 → npm-guard 经 SHIM_IP:28090 访问
+    env_file:
+      - overlay/ipguard.env          # 相对路径以项目目录(第一个 -f 文件所在目录)为准,不是本文件所在目录
+    environment:
+      TZ: "${TZ}"
+      IPGUARD_LOGS_DIR: /logs
+      IPGUARD_STORAGE_DATADIR: /app/data
+      IPGUARD_GEOIP_CITYDB: /app/data/geoip/dbip-city-lite.mmdb
+      IPGUARD_CROWDSEC_URL: http://crowdsec:8080
+      IPGUARD_LOGS_BACKENDALIASES: "${SHIM_IP}=HOST"   # 日志里 shim 地址显示为 HOST:端口
+    volumes:
+      - ./ipguard-data:/app/data
+      - ./npm/data/logs:/logs:ro                        # 读 npm-guard 统一访问日志
+      - ./npm/data/nginx:/npm-nginx:ro                  # 读反代配置,把后端补全成"地址:端口"
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

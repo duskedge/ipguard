@@ -1,0 +1,16 @@
+# NPM_DB_MODE=mysql-external:接一个已存在的 MySQL(不在本栈内起库)。
+# 由 setup.sh 自动叠加。只给 npm-guard 注入 DB_MYSQL_* 环境变量,不新增服务。
+#
+# 地址怎么填(DB_MYSQL_HOST):
+#   - MySQL 跑在【本宿主】上(容器发布了 3306)→ 填 SHIM_IP(如 192.168.1.250),
+#     因为 macvlan 的 npm-guard 要经 shim 绕回宿主。
+#   - MySQL 跑在【局域网另一台机器】→ 直接填那台的 LAN IP(macvlan 可直达同网段主机)。
+
+services:
+  npm-guard:
+    environment:
+      DB_MYSQL_HOST: "${DB_MYSQL_HOST}"
+      DB_MYSQL_PORT: "${DB_MYSQL_PORT:-3306}"
+      DB_MYSQL_USER: "${DB_MYSQL_USER}"
+      DB_MYSQL_PASSWORD: "${DB_MYSQL_PASSWORD}"
+      DB_MYSQL_NAME: "${DB_MYSQL_NAME:-npm}"

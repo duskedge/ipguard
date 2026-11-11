@@ -1,0 +1,167 @@
+name: Release
+
+# 推送 v*.*.* 标签即发布:测试 → 多平台镜像(ghcr.io) + 二进制 → GitHub Release
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Go vet & test
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed"; exit 1; }
+          go vet ./...
+          go test ./...
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Web test & type-check
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - id: time
+        run: echo "now=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.time.outputs.now }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    needs: docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build binaries (UI embedded)
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cd web && pnpm install --frozen-lockfile && pnpm exec vite build && cd ..
+          rm -rf internal/webui/dist && cp -r web/dist internal/webui/dist
+          mkdir -p dist
+          LDFLAGS="-s -w -X main.version=${VERSION} -X main.gitCommit=${GITHUB_SHA} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          for arch in amd64 arm64; do
+            name="ipguard_${VERSION#v}_linux_${arch}"
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -ldflags "$LDFLAGS" -o "dist/${name}/ipguard" ./cmd/ipguard
+            cp LICENSE README.md README_zh.md config.example.yaml "dist/${name}/"
+            tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          done
+          cd dist && sha256sum *.tar.gz > checksums.txt
+
+      - name: Release notes
+        env:
+          VERSION: ${{ github.ref_name }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || true)
+          {
+            echo "## 镜像 / Docker image"
+            echo
+            echo '```bash'
+            echo "docker pull ${IMAGE}:${VERSION#v}"
+            echo '```'
+            echo
+            echo "平台 / Platforms: \`linux/amd64\`, \`linux/arm64\`。部署方式见 [README](https://github.com/${GITHUB_REPOSITORY}#deployment)。"
+            echo
+            echo "## 变更 / Changes"
+            echo
+            if [ -n "$prev" ]; then
+              git log --no-merges --format='- %s (%h)' "${prev}..${VERSION}"
+            else
+              echo "- 首个公开版本 / Initial public release"
+            fi
+          } > notes.md
+          cat notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: notes.md
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt

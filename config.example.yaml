@@ -1,0 +1,58 @@
+# ipguard 配置示例。所有项都可用环境变量覆盖（前缀 IPGUARD_，点号换下划线）：
+#   IPGUARD_AUTH_PASSWORD=xxx
+#   IPGUARD_CROWDSEC_MACHINEID=ipguard  IPGUARD_CROWDSEC_PASSWORD=xxx
+# 整个文件缺失也能跑——容器部署一般只用环境变量（见 deploy/ipguard.env.example）。
+# 查找顺序：$IPGUARD_CONFIG → ./config.yaml → ./data/config.yaml
+
+server:
+  port: 8080
+  mode: release              # debug 时打印请求日志与 SQL
+  site: example.com           # 侧栏副标题，仅展示用
+  timezone: Asia/Shanghai    # “今天”从几点开始、趋势按哪个时区分桶
+
+auth:
+  username: admin
+  password: ""               # 与 passwordHash 二选一，必填其一
+  passwordHash: ""           # bcrypt，生成：ipguard hash-password '<口令>'
+  jwtSecret: ""              # 留空则生成并落盘到 data/.jwt_key（0600）；每次重启旧登录会话失效
+  tokenTTL: 12h
+
+storage:
+  dataDir: ./data            # SQLite（审计日志）、JWT 密钥、通知配置与投递记录、可选的 geoip/
+
+logs:
+  previewScheme: https       # 日志图片预览使用的对外协议
+  previewPort: 443           # 域名对外端口(不是后端端口);非标准端口如 8443 按实际填
+  dir: /logs                 # npm-guard 的 data/logs，只读挂载
+  patterns: ["*_access.log"] # 只匹配文件名；轮转出的 .1 / .2.gz 自动纳入
+  exclude: ["fallback_stream_access.log"]
+  pollInterval: 5s
+  retention: 168h            # 内存里保留 7 天
+  maxEntries: 2000000
+  npmConfDir: /npm-nginx/proxy_host  # npm 的 data/nginx/proxy_host（只读挂载）：补全后端端口
+  backendAliases: ""                 # 后端别名，如 "192.168.1.250=HOST"
+
+geoip:
+  cityDB: ./data/geoip/dbip-city-lite.mmdb   # 优先：挂载目录里按月更新的库（make geoip 可下载）
+  fallbackDB: /app/geoip/dbip-city-lite.mmdb # 其次：镜像构建时打包的库
+  # ip2region：修正国内 IP 的省/市并给出运营商（dbip 对国内运营商网段常定位到错误城市）
+  regionDB: ./data/geoip/ip2region.xdb
+  regionFallbackDB: /app/geoip/ip2region.xdb
+
+crowdsec:
+  url: http://crowdsec:8080  # 同网络直连；或 http://192.168.1.8:8099
+  machineID: ""              # cscli machines add ipguard --password '<口令>' -f /dev/null
+  password: ""
+  timeout: 15s
+  cacheTTL: 30s              # 决策列表缓存（社区黑名单可能上万条）
+  origin: cscli              # 写入决策用的 origin，列表里归为“手动”
+
+detect:                      # 异常识别阈值（只做高亮提示，不会自动封禁）
+  scanHits: 3                # 敏感路径命中 ≥ 3 次 且 4xx/5xx ≥ 60% → 扫描
+  scanErrRatio: 0.6
+  warnMinReq: 10             # 请求 ≥ 10 且 4xx/5xx ≥ 30% → 可疑
+  warnErrRatio: 0.3
+  # sensitivePaths: ["/.env", "/.git", "wp-login"]   # 不填用内置列表
+
+log:
+  level: info

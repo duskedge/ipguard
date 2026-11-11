@@ -1,0 +1,4 @@
+filenames:
+  - /var/log/npm/proxy_combined.log
+labels:
+  type: nginx

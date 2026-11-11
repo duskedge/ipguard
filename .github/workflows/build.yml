@@ -1,0 +1,44 @@
+name: build
+
+# 日常推送 / PR 只跑测试;镜像与 Release 由 release.yml 在打 v*.*.* 标签时发布
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Go vet & test
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt needed"; exit 1; }
+          go vet ./...
+          go test ./...
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Web test & type-check
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
