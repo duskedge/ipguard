@@ -30,7 +30,10 @@ elif command -v docker-compose >/dev/null 2>&1; then DC="docker-compose"
 else die "未找到 docker compose(v2)或 docker-compose(v1),请先安装 Docker。"; fi
 
 [ -f .env ] || die "缺少 .env,请先 cp .env.example .env 并按注释修改。"
+# 命令行临时传入的 ROS_ADMIN_PASS 优先,不被 .env 里的空值覆盖(如:ROS_ADMIN_PASS=xxx ./setup.sh --down)
+_ros_admin_pass_env="${ROS_ADMIN_PASS:-}"
 set -a; . ./.env; set +a
+[ -n "$_ros_admin_pass_env" ] && ROS_ADMIN_PASS="$_ros_admin_pass_env"; unset _ros_admin_pass_env
 
 require() { local v; for v in "$@"; do [ -n "${!v:-}" ] || die "环境变量 $v 未设置(见 .env)"; done; }
 require TZ LAPI_PORT ADDRESS_LIST PARENT_IFACE LAN_SUBNET LAN_GATEWAY NPM_IP SHIM_IP \
