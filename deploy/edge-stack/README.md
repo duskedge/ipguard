@@ -33,16 +33,18 @@
 ```bash
 cp .env.example .env
 vi .env                       # 带 ★ 的必改：网卡、网段、两个空闲 IP、RouterOS 地址和 WAN 口
-./setup.sh                    # 基线：CrowdSec + bouncer + npm-guard
-./setup.sh --with-ipguard     # 叠加 ipguard（先 cp overlay/ipguard.env.example overlay/ipguard.env 并填登录口令）
-./setup.sh --with-ipguard --with-adguard   # 再叠加 AdGuard Home
+cp overlay/ipguard.env.example overlay/ipguard.env   # 填 ipguard 登录口令
+./setup.sh --with-ipguard --with-adguard   # 整套：基线 + ipguard + AdGuard Home（推荐）
 ```
+
+- **不需要 AdGuard Home？** 去掉 `--with-adguard`（例如宿主 `53` 端口已被占用）。
+- **只要基线（不要 ipguard 面板）？** 两个参数都去掉，直接 `./setup.sh`。
 
 脚本是幂等的，可以重复执行；改了 `.env` 重跑一次即可补齐。之后执行 `--verify` 或 `--down` 时，要带上与搭建时相同的 `--with-*` 参数。
 
 ```bash
-./setup.sh --with-ipguard --verify   # 只跑自检
-./setup.sh --with-ipguard --down     # 停服务，并清理 RouterOS 上本栈创建的东西（数据目录保留）
+./setup.sh --with-ipguard --with-adguard --verify   # 只跑自检
+./setup.sh --with-ipguard --with-adguard --down     # 停服务，并清理 RouterOS 上本栈创建的东西（数据目录保留）
 ```
 
 ### 脚本会做什么

@@ -90,10 +90,12 @@ git clone https://github.com/duskedge/ipguard.git
 cd ipguard/deploy/edge-stack
 cp .env.example .env && vi .env                     # 网络、RouterOS、域名、各类口令
 cp overlay/ipguard.env.example overlay/ipguard.env  # ipguard 登录口令
-./setup.sh --with-ipguard                           # 需要 AdGuard Home 再加 --with-adguard
+./setup.sh --with-ipguard --with-adguard           # 整套：基线 + ipguard + AdGuard Home
 ```
 
-`./setup.sh --with-ipguard --down` 会停掉所有服务，并删除脚本在 RouterOS 上创建的内容：`dstnat` 规则、地址表、raw 规则和受限账号。详见 [`deploy/edge-stack/README.md`](deploy/edge-stack/README.md)。
+> **不需要 AdGuard Home？** 去掉 `--with-adguard` 即可（例如宿主 `53` 端口已被占用）。之后执行 `--verify` / `--down` 时要带**相同的参数**，否则没带上的那部分容器不会被管理。
+
+`./setup.sh --with-ipguard --with-adguard --down` 会停掉所有服务，并删除脚本在 RouterOS 上创建的内容：`dstnat` 规则、地址表、raw 规则和受限账号。详见 [`deploy/edge-stack/README.md`](deploy/edge-stack/README.md)。
 
 ### 方式 B：单独部署 ipguard（已有 CrowdSec + bouncer + 反代）
 

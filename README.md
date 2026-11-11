@@ -92,10 +92,12 @@ git clone https://github.com/duskedge/ipguard.git
 cd ipguard/deploy/edge-stack
 cp .env.example .env && vi .env                     # network, RouterOS, domain, passwords
 cp overlay/ipguard.env.example overlay/ipguard.env  # ipguard login password
-./setup.sh --with-ipguard                           # add --with-adguard for AdGuard Home
+./setup.sh --with-ipguard --with-adguard           # full stack: + ipguard + AdGuard Home
 ```
 
-`./setup.sh --with-ipguard --down` stops everything and removes what the installer created on RouterOS: the `dstnat` rule, the address list, the raw rules and the restricted account. See [`deploy/edge-stack/README.md`](deploy/edge-stack/README.md) for details.
+> **Don't need AdGuard Home?** Drop `--with-adguard` (e.g. host port `53` is already in use). Use the **same flags** for every later `--verify` / `--down`, otherwise the omitted containers are not managed.
+
+`./setup.sh --with-ipguard --with-adguard --down` stops everything and removes what the installer created on RouterOS: the `dstnat` rule, the address list, the raw rules and the restricted account. See [`deploy/edge-stack/README.md`](deploy/edge-stack/README.md) for details.
 
 ### Option B — standalone ipguard (existing CrowdSec + bouncer + proxy)
 
