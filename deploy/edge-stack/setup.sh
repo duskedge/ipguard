@@ -62,6 +62,8 @@ esac
 [ "$WITH_ADGUARD" = 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f overlay/docker-compose.adguard.yml"
 DC_BASE="$DC $COMPOSE_FILES"
 DC_IPG="$DC $COMPOSE_FILES -f overlay/docker-compose.ipguard.yml"
+# 叠加 ipguard 时,基线命令(不含 ipguard overlay)会把 ipguard 容器报成 orphan,属预期,屏蔽该警告
+[ "$WITH_IPGUARD" = 1 ] && export COMPOSE_IGNORE_ORPHANS=True
 
 # ---- RouterOS 操作:全走 REST API(www 服务),不用 SSH / 不用 key ----
 #   日常(加删 dstnat、卸载清理)用受限账号 MIKROTIK_USER/PASS(无 policy 权限,管不了用户);
