@@ -229,7 +229,7 @@ func (e *Engine) aggregate(recs []Record) map[netip.Addr]*ipAgg {
 			m[r.IP] = a
 		}
 		a.count++
-		if r.Status >= 400 {
+		if isErrorStatus(r.Status) {
 			a.errs++
 		}
 		if r.TS > a.last {
@@ -241,7 +241,7 @@ func (e *Engine) aggregate(recs []Record) map[netip.Addr]*ipAgg {
 		p := trimQuery(r.Path)
 		// 只有失败的敏感路径访问才算扫描特征：扫描器探 /.env 基本拿到 404，
 		// 自己用 WebDAV/后台正常打开这类文件是 200/207，不应被标可疑
-		if r.Status >= 400 && e.IsSensitive(r.Path) {
+		if isErrorStatus(r.Status) && e.IsSensitive(r.Path) {
 			a.sensitive++
 			if _, ok := a.sensPaths[p]; ok || len(a.sensPaths) < maxPathsPerIP {
 				a.sensPaths[p]++
@@ -267,6 +267,10 @@ func (a *ipAgg) errRatio() float64 {
 	}
 	return float64(a.errs) / float64(a.count)
 }
+
+// isErrorStatus 判断请求是否计入错误率。499 是 nginx 的"客户端主动断开"(浏览器取消未加载完的图片、
+// 拖动视频进度等),不是服务端错误也不是攻击特征,计入会把正常浏览媒体库的访客误判为可疑。
+func isErrorStatus(s int) bool { return s >= 400 && s != 499 }
 
 // level：scan（扫描）> warn（可疑）> normal。内网地址不打标。
 func (e *Engine) level(a *ipAgg) string {

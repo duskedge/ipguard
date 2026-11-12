@@ -113,7 +113,7 @@ func (e *Engine) buildHostsSnapshot(rng string, hideLAN bool, selectedHost strin
 				}
 				snap.totalReq++
 				snap.totalBytes += r.Size
-				isErr := r.Status >= 400
+				isErr := isErrorStatus(r.Status)
 				if isErr {
 					snap.totalErr++
 				}

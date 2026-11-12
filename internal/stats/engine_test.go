@@ -106,3 +106,33 @@ func TestLevelsAndLogs(t *testing.T) {
 		t.Fatalf("域名统计不对: %+v", hs)
 	}
 }
+
+// 浏览媒体库时浏览器会取消未加载完的图片,nginx 记为 499;这不应计入错误率,否则正常访客被标"可疑"。
+func TestClientClosed499NotCountedAsError(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Date(2026, 11, 12, 9, 0, 0, 0, loc)
+	var es []logparser.Entry
+	for i := 0; i < 20; i++ {
+		status := 200
+		if i%2 == 0 {
+			status = 499
+		}
+		es = append(es, ent(now.Add(-time.Duration(i+1)*time.Minute), "203.0.113.50", "/gateway/preview/x", status))
+	}
+	// 对照组:同样比例但是真实的 404,应判为可疑
+	for i := 0; i < 20; i++ {
+		status := 200
+		if i%2 == 0 {
+			status = 404
+		}
+		es = append(es, ent(now.Add(-time.Duration(i+1)*time.Minute), "203.0.113.51", "/gateway/preview/x", status))
+	}
+	e := newTestEngine(t, now, es)
+	lv := map[string]string{}
+	for _, r := range e.IPs(IPQuery{Range: "24h", Sort: "count", Dir: "desc", Page: 1, Size: 10}).Rows {
+		lv[r.IP] = r.Level
+	}
+	if lv["203.0.113.50"] != "normal" || lv["203.0.113.51"] != "warn" {
+		t.Fatalf("499 不应计入错误率: %v", lv)
+	}
+}
