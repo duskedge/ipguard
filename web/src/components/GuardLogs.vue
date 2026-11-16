@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronDown, ShieldBan } from 'lucide-vue-next'
 import { api } from '@/api'
-import type { LogRange } from '@/api/types'
+import type { GuardLogRange } from '@/api/types'
 import IpCell from '@/components/IpCell.vue'
 import PagerBar from '@/components/PagerBar.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -14,25 +14,25 @@ import { useDebounced, useLoader } from '@/utils/poll'
 const route = useRoute()
 const router = useRouter()
 const query = (key: string) => typeof route.query[key] === 'string' ? route.query[key] as string : ''
-const f = reactive({ range: (query('range') || '24h') as LogRange, ip: query('ip'), host: query('host'), rule: query('rule'), path: '', page: 1, size: 20 })
+const f = reactive({ range: (query('range') || 'all') as GuardLogRange, ip: query('ip'), host: query('host'), rule: query('rule'), path: '', page: 1, size: 20 })
 const ip = useDebounced(() => f.ip)
 const host = useDebounced(() => f.host)
 const path = useDebounced(() => f.path)
 const opened = ref<number | null>(null)
 const ruleHosts = computed(() => f.rule.split(/[,;，；]+/).map((s) => s.trim()).filter(Boolean))
 watch(() => [route.query.ip, route.query.host, route.query.rule, route.query.range], () => {
-  f.ip = query('ip'); f.host = query('host'); f.rule = query('rule'); f.range = (query('range') || '24h') as LogRange
+  f.ip = query('ip'); f.host = query('host'); f.rule = query('rule'); f.range = (query('range') || 'all') as GuardLogRange
 })
 watch(() => [f.range, ip.value, host.value, path.value, f.rule, f.size], () => { f.page = 1; opened.value = null })
 const { data, loading, error } = useLoader(() => api.guardLogs({ range: f.range, ip: ip.value.trim(), host: host.value.trim(), rule: f.rule, path: path.value.trim(), page: f.page, size: f.size }),
   [() => [f.range, ip.value, host.value, f.rule, path.value, f.page, f.size]])
-const ranges = [{value:'1h',label:'最近 1 小时'},{value:'24h',label:'最近 24 小时'},{value:'today',label:'今天'},{value:'7d',label:'最近 7 天'}]
+const ranges = [{value:'all',label:'全部时间'},{value:'1h',label:'最近 1 小时'},{value:'24h',label:'最近 24 小时'},{value:'today',label:'今天'},{value:'7d',label:'最近 7 天'}]
 const hasFilter = computed(() => f.ip || f.host || f.rule || f.path)
 function reset() { f.ip = ''; f.host = ''; f.rule = ''; f.path = ''; router.replace({name: 'logs', query: {tab:'guard'}}) }
 </script>
 
 <template>
-  <p class="lead">记录域名访问控制实际拒绝的请求，保留当时的规则与原因。同一分钟的相同拦截合并计数，保留最近 7 天、最多 2 万条样本；记录跨部署保留；设置页为持久化累计次数，与采样明细条数不同，历史 403 无法补录。</p>
+  <p class="lead">记录域名访问控制实际拒绝的请求，保留当时的规则与原因。同一分钟的相同拦截合并计数，最多保留 2 万条样本；记录跨部署保留；设置页为持久化累计次数，历史 403 无法补录。</p>
   <div class="filters">
     <SelectBox v-model="f.range" :options="ranges" aria-label="拦截时间范围" min-width="136px" />
     <input v-model="f.ip" class="field" aria-label="拦截客户端 IP" placeholder="客户端 IP（精确匹配）">

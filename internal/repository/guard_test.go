@@ -38,8 +38,12 @@ func TestGuardLogsPersistFilterAndExpire(t *testing.T) {
 		t.Fatalf("snapshot/filter failed: %+v %d %v", rows, total, err)
 	}
 	rows, total, err = r.List(context.Background(), 0, "", "", "", "", 1, 1)
-	if err != nil || total != 2 || len(rows) != 1 || rows[0].IP != "9.9.9.9" {
+	if err != nil || total != 3 || len(rows) != 1 || rows[0].IP != "9.9.9.9" {
 		t.Fatalf("retention/pagination failed: %+v %d %v", rows, total, err)
+	}
+	rows, total, err = r.List(context.Background(), time.Now().Add(-7*24*time.Hour).UnixMilli(), "", "", "", "", 1, 10)
+	if err != nil || total != 2 || len(rows) != 2 {
+		t.Fatalf("since filter failed: %+v %d %v", rows, total, err)
 	}
 }
 

@@ -67,9 +67,9 @@ func TestGuardCheckRecordsOnlyActualDenials(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("GET", "/api/logs/guard?size=999&page=-1&rule=hub.example.com", nil)
+	c.Request = httptest.NewRequest("GET", "/api/logs/guard?size=999&page=-1&rule=hub.example.com&range=all", nil)
 	h.GuardLogList(c)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"page":1`) {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"page":1`) || !strings.Contains(w.Body.String(), `"total":1`) {
 		t.Fatalf("list: %s", w.Body.String())
 	}
 }

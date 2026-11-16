@@ -13,6 +13,10 @@ func (h *Handler) GuardLogList(c *gin.Context) {
 		fail(c, http.StatusServiceUnavailable, "域名拦截日志不可用")
 		return
 	}
+	if c.Query("range") == "all" {
+		h.guardLogResponse(c, 0)
+		return
+	}
 	now := time.Now()
 	if h.Engine != nil {
 		since, _ := h.Engine.Window(c.Query("range"))

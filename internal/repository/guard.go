@@ -145,11 +145,14 @@ func (r *GuardRepo) writeBatch(rows []model.GuardLog) error {
 	})
 }
 func (r *GuardRepo) prune(tx *gorm.DB) error {
-	return tx.Exec(`DELETE FROM guard_logs WHERE ts < ? OR id <= COALESCE((SELECT id FROM guard_logs ORDER BY id DESC LIMIT 1 OFFSET ?), 0)`, time.Now().Add(-7*24*time.Hour).UnixMilli(), guardMaxRows).Error
+	return tx.Exec(`DELETE FROM guard_logs WHERE id <= COALESCE((SELECT id FROM guard_logs ORDER BY id DESC LIMIT 1 OFFSET ?), 0)`, guardMaxRows).Error
 }
 func (r *GuardRepo) List(ctx context.Context, since int64, ip, host, rule, path string, page, size int) ([]model.GuardLog, int64, error) {
 	base := func() *gorm.DB {
-		tx := r.db.WithContext(ctx).Model(&model.GuardLog{}).Where("last_ts >= ?", since)
+		tx := r.db.WithContext(ctx).Model(&model.GuardLog{})
+		if since > 0 {
+			tx = tx.Where("last_ts >= ?", since)
+		}
 		if ip != "" {
 			tx = tx.Where("ip = ?", ip)
 		}

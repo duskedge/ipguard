@@ -3,6 +3,7 @@
 export type Level = 'scan' | 'warn' | 'normal'
 export type Range = '1h' | '24h' | '7d'
 export type LogRange = Range | 'today'
+export type GuardLogRange = LogRange | 'all'
 export type Source = 'manual' | 'auto' | 'community'
 
 export interface Paged<T> { rows: T[]; page: number; pages: number; total: number }

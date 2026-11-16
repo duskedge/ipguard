@@ -116,7 +116,7 @@ function ruleStatTooltip(rule: EditableHostRule): string {
   if (rule.lastBlockedIp) {
     lines.push(`最近拦截：${rule.lastBlockedIp}（${fmtFull(rule.lastBlockedAt)}）`)
   }
-  lines.push('点击查看近 7 天采样记录（支持按域名单独筛选）')
+  lines.push('点击查看全部拦截记录（支持按域名单独筛选）')
   return lines.join('；')
 }
 
@@ -879,7 +879,7 @@ async function test() {
                       <span class="host-token-val mono" :title="h">{{ h }}</span>
                       <RouterLink
                         v-if="rule.hosts.length > 1 && rule.hostStats[h]?.blocked_count"
-                        :to="{ name: 'logs', query: { tab: 'guard', rule: h, range: '7d' } }"
+                        :to="{ name: 'logs', query: { tab: 'guard', rule: h, range: 'all' } }"
                         class="host-token-stat mono"
                         :title="`${h} 累计拦截 ${rule.hostStats[h]!.blocked_count} 次，点击仅看该域名拦截记录`"
                         @mousedown.stop
@@ -1000,14 +1000,14 @@ async function test() {
               <td><IpListInput :id="`rule-ips-${idx}`" :ref="(el) => setAddressEditor(idx, el)" v-model="rule.allowIpsText" /><p :id="`rule-ips-${idx}-help`" hidden>{{ rule.mode === 'domestic' ? '额外白名单；国内与内网默认放行' : '地址或选中标识，满足其一即可访问' }}</p></td>
               <td><input :id="`rule-note-${idx}`" v-model="rule.note" class="field" aria-label="域名规则备注" maxlength="100" placeholder="备注（选填）"></td>
               <td class="stat-column">
-                <RouterLink class="rule-stat" :to="{ name: 'logs', query: { tab: 'guard', rule: effectiveRuleHosts(rule).join(','), range: '7d' } }" :title="ruleStatTooltip(rule)">
+                <RouterLink class="rule-stat" :to="{ name: 'logs', query: { tab: 'guard', rule: effectiveRuleHosts(rule).join(','), range: 'all' } }" :title="ruleStatTooltip(rule)">
                   <span><strong :class="{ 'has-blocks': rule.blockedCount > 0 }">{{ rule.blockedCount.toLocaleString() }}</strong> 次</span><span class="rule-stat-link">{{ rule.hosts.length > 1 ? '查看各域名' : '查看记录' }}</span>
                 </RouterLink>
               </td>
               <td class="action-column"><button type="button" class="btn sm ghost-danger" :aria-label="`删除域名规则 ${ruleDisplayLabel(rule) || idx + 1}`" @click="removeHostRule(idx)"><Trash2 :size="14" />删除</button></td>
             </tr>
           </tbody>
-          <tfoot v-if="!hostRuleLoading && hostRules.length"><tr><td colspan="7"><span>共 {{ hostRules.length }} 条规则，已启用 {{ enabledHostRulesCount }} 条</span><span class="table-summary-note">累计次数跨部署保留；“查看记录”为近 7 天采样明细</span></td><td class="stat-column"><span class="table-summary-count">合计 <strong>{{ totalBlockedCount.toLocaleString() }}</strong> 次</span></td><td></td></tr></tfoot>
+          <tfoot v-if="!hostRuleLoading && hostRules.length"><tr><td colspan="7"><span>共 {{ hostRules.length }} 条规则，已启用 {{ enabledHostRulesCount }} 条</span><span class="table-summary-note">累计次数与拦截明细均跨部署保留，点击可按域名查看记录</span></td><td class="stat-column"><span class="table-summary-count">合计 <strong>{{ totalBlockedCount.toLocaleString() }}</strong> 次</span></td><td></td></tr></tfoot>
         </table>
       </div>
       <footer class="settings-table-foot">
