@@ -65,7 +65,7 @@ func (r *GuardRepo) run() {
 	}
 	pending := make(map[string]model.GuardLog)
 	seen := make(map[string]bool)
-	minute := time.Now().Unix() / 60
+	var minute int64
 	var reported uint64
 	flush := func() {
 		if len(pending) > 0 {
@@ -93,7 +93,13 @@ func (r *GuardRepo) run() {
 				flush()
 				return
 			}
-			if m := time.Now().Unix() / 60; m != minute {
+			m := row.TS / 60000
+			if m <= 0 {
+				m = time.Now().Unix() / 60
+			}
+			if minute == 0 {
+				minute = m
+			} else if m > minute {
 				clear(seen)
 				minute = m
 			}
